@@ -1,7 +1,7 @@
-/* 321出埃及记讲义 · Service Worker（離線可用）
+/* 321出埃及記講義 · Service Worker（離線可用）
    版本字串在每次 make_site.py 重新打包時都會變，
    一變就會清掉舊快取、重新抓一份新的，使用者不必手動清除。 */
-const V = '出埃及记-eaab9c399f76';
+const V = '出埃及記-4a6a19d2f685';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png',
