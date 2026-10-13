@@ -1,13 +1,13 @@
 /* 321出埃及記講義 · Service Worker（離線可用）
    版本字串在每次 make_site.py 重新打包時都會變，
    一變就會清掉舊快取、重新抓一份新的，使用者不必手動清除。 */
-const V = '出埃及記-gx11202610132140-ic1';
+const V = '出埃及記-gx11202610132140-ic2';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
-  './icons/icon-192.png', './icons/icon-512.png',
-  './icons/icon-180.png', './icons/icon-167.png',
-  './icons/icon-152.png', './icons/icon-120.png',
-  './icons/icon-64.png', './favicon.ico',
+  './icon-192.png', './icon-512.png',
+  './icon-180.png', './icon-167.png',
+  './icon-152.png', './icon-120.png',
+  './icon-64.png', './favicon.ico',
 ];
 
 self.addEventListener('install', e => {
