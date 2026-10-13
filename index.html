@@ -4378,7 +4378,7 @@ function mx_strBytes(s){const a=new Uint8Array(s.length);for(let i=0;i<s.length;
   };
 })();
 
-var GX_VER = "1.1.202610132140";
+var GX_VER = "1.1.202610132220";
 </script>
 <script>/* ===== 321出埃及記講義 ===== */
 const D = JSON.parse(document.getElementById('DATA').textContent);
@@ -6499,6 +6499,180 @@ window.drawXz = () => SAGE321.draw();
   const upd = () => { if (f) f.style.display = ((typeof F !== 'undefined' && F !== null) || SAGE321.isOpen()) ? 'none' : 'grid'; };
   if (f) f.onclick = () => { SAGE321.open(); upd(); };
   try { new MutationObserver(upd).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] }); } catch (e) {}
+})();
+
+/* ═══════════════════════════════════════════════════════════════════
+   畫線範圍（照《321互動聖經》）：往前加一句、往後加一句／少一句、整節、整段
+   一條畫線仍只記在第一句的 key 上，S.mk[k].sp = 這條畫線共幾句。
+   ═══════════════════════════════════════════════════════════════════ */
+(function () {
+  const MKS_TEXT = window.mkText, MKS_SHEET = window.mkSheet, MKS_TAP = window.mkTap;
+  const sp = k => Math.max(1, +((S.mk[k] || {}).sp) || 1);
+  /* 經文：由資料攤平整章的句子（不靠畫面，哪裡打開都算得對） */
+  function seqV(c) {
+    const out = [];
+    (D.txt[c] || []).forEach((t, i) => {
+      const n = splitHTML(esc(t)).length, ref = c + ':' + (i + 1);
+      for (let s = 0; s < n; s++) out.push({ k: 'v|' + ref + (n > 1 ? '|' + s : ''), v: i + 1 });
+    });
+    return out;
+  }
+  /* 其他（講義、解經、三句話）：照畫面上的順序 */
+  const grp = p => p[0] === 'l' ? 'l|' + p[1] + '|' : p.slice(0, -1).join('|') + '|';
+  function seqDom(k) {
+    const g = grp(k.split('|')), seen = {}, out = [];
+    document.querySelectorAll('.mks[data-k],.mkp[data-k]').forEach(e => {
+      const x = e.dataset.k;
+      if (x.indexOf(g) === 0 && !seen[x]) { seen[x] = 1; out.push({ k: x }); }
+    });
+    if (!seen[k]) out.unshift({ k });
+    return out;
+  }
+  function seq(k) {
+    const p = k.split('|');
+    return p[0] === 'v' ? seqV(p[1].split(':')[0]) : seqDom(k);
+  }
+  function keysOf(k) {
+    const L = seq(k), i = L.findIndex(x => x.k === k);
+    if (i < 0) return [k];
+    return L.slice(i, i + sp(k)).map(x => x.k);
+  }
+  /* 整節／整段要畫幾句 */
+  function spanTo(k, mode) {
+    const L = seq(k), i = L.findIndex(x => x.k === k), p = k.split('|');
+    if (i < 0) return 1;
+    let n = 1;
+    if (p[0] === 'v') {
+      const c = p[1].split(':')[0], v = L[i].v;
+      let z = v;
+      if (mode === 'p') { const b = VMAP[c + ':' + v]; z = b && b.z ? b.z : v; }
+      while (i + n < L.length && L[i + n].v <= z) n++;
+    } else {
+      const pre = p[0] === 'l' ? p.slice(0, 4).join('|') + '|' : grp(p);
+      while (i + n < L.length && L[i + n].k.indexOf(pre) === 0) n++;
+    }
+    return n;
+  }
+  /* 出處：經文算出「出埃及記 1:6-7」；其他交給美圖自己去查 */
+  function refOf(k) {
+    const p = k.split('|');
+    if (p[0] !== 'v') return GX.chLabel(+String(p[1] || '').split(':')[0] || R.ch || S.last || 1);
+    const ks = keysOf(k), a = ks[0].split('|')[1].split(':'), z = ks[ks.length - 1].split('|')[1].split(':');
+    return GX.BK.zh + ' ' + a[0] + ':' + a[1] + (z[1] !== a[1] ? '-' + z[1] : '');
+  }
+  window.mkText = function (k) {
+    if (!S.mk[k] || sp(k) < 2) return MKS_TEXT(k);
+    return keysOf(k).map(x => MKS_TEXT(x)).join(k[0] === 'v' ? '' : ' ').trim();
+  };
+  /* 把多句畫線延伸到後面幾句（只改畫面，不另外存） */
+  function paint() {
+    document.querySelectorAll('[data-own]').forEach(e => {
+      if (!mkHas(e.dataset.own) && !mkHas(e.dataset.k)) { e.classList.remove('hl'); e.removeAttribute('data-c'); }
+      e.removeAttribute('data-own');
+    });
+    Object.keys(S.mk).forEach(k => {
+      if (sp(k) < 2) return;
+      const c = mkColor(k);
+      keysOf(k).slice(1).forEach(x => document.querySelectorAll('[data-k="' + x + '"]').forEach(e => {
+        if (mkHas(x)) return;
+        e.classList.add('hl'); e.dataset.own = k;
+        if (c) e.setAttribute('data-c', c); else e.removeAttribute('data-c');
+      }));
+    });
+  }
+  window.mkPaintSpans = paint;
+  const R0 = window.render;
+  window.render = function () { const r = R0.apply(this, arguments); try { paint(); } catch (e) {} return r; };
+  /* 點到被別條畫線蓋住的句子，就打開那一條 */
+  window.mkTap = function (k, el) {
+    const own = el && el.dataset && el.dataset.own;
+    if (own && mkHas(own) && !mkHas(k)) return window.mkSheet(own);
+    return MKS_TAP(k, el);
+  };
+  const SC0 = window.mkSetColor;
+  window.mkSetColor = function (k, c) { SC0(k, c); try { paint(); } catch (e) {} };
+  /* 儲存領受時保留範圍 */
+  window.mkSave = function (k) {
+    const v = ($('#mkin') || {}).value || '';
+    const o = S.mk[k] || {};
+    S.mk[k] = { n: v.trim(), at: Date.now(), c: mkColor(k) };
+    if (o.sp > 1) S.mk[k].sp = o.sp;
+    save();
+    $('#sheet').classList.remove('on'); mkKeep(k, render); toast('領受已存');
+  };
+  window.mkCard = function (k) {
+    const n = ($('#mkin') || {}).value || mkNote(k), sh = $('#sheet');
+    if (sh) sh.classList.remove('on');
+    GXS.open({ text: window.mkText(k), note: n, ref: refOf(k) });
+  };
+  function rowHTML(k) {
+    const isV = k[0] === 'v';
+    return `<div class="hlrow mkspan"><span class="lb">範圍</span>
+      <button class="spb" data-sp="back" title="往前加一句">↑前一句</button>
+      <button class="spb" data-sp="-1">－</button>
+      <span class="spn" id="mkSpn">${sp(k)} 句</span>
+      <button class="spb" data-sp="1">＋</button>
+      ${isV ? '<button class="spb" data-sp="v">整節</button>' : ''}
+      <button class="spb" data-sp="p" title="${isV ? '這一段解經涵蓋的經文' : '這一段'}">整段</button></div>
+      <div class="mkspan-hint">按 ＋ 往下多畫一句、按「↑前一句」往上加一句，畫線就不只一句，可以連成一整段。${isV ? '「整段」是這段解經涵蓋的經文。' : ''}</div>`;
+  }
+  window.mkSheet = function (k) {
+    MKS_SHEET(k);
+    const box = $('#sheet'); if (!box) return;
+    const row = box.querySelector('.hlrow');
+    if (row && !box.querySelector('.mkspan')) row.insertAdjacentHTML('afterend', rowHTML(k));
+    box.querySelectorAll('button').forEach(b => {
+      if (/做成美圖/.test(b.textContent)) b.onclick = e => { e.stopPropagation(); window.mkCard(k); };
+    });
+    box.querySelectorAll('[data-sp]').forEach(b => b.onclick = e => { e.stopPropagation(); spanAct(k, b.dataset.sp); });
+  };
+  function refresh(k, ta) {
+    const box = $('#sheet');
+    const q = box && box.querySelector('#mkq'); if (q) q.textContent = window.mkText(k).slice(0, 300);
+    const n = box && box.querySelector('#mkSpn'); if (n) n.textContent = sp(k) + ' 句';
+    mkKeep(k, render);
+    if (ta != null) { const t = $('#mkin'); if (t) t.value = ta; }
+  }
+  function spanAct(k, a) {
+    if (!mkHas(k)) return;
+    const ta = ($('#mkin') || {}).value;
+    const m = S.mk[k], was = sp(k), L = seq(k), i = L.findIndex(x => x.k === k);
+    if (a === 'back') {
+      if (i <= 0) return toast('前面沒有句子了');
+      const pk = L[i - 1].k;
+      if (mkHas(pk)) return toast('前一句已經畫了線');
+      const own = document.querySelector('[data-k="' + pk + '"][data-own]');
+      if (own) return toast('前一句屬於另一條畫線');
+      if (ta != null) m.n = ta.trim();
+      S.mk[pk] = Object.assign({}, m, { sp: was + 1, at: Date.now() });
+      delete S.mk[k]; save();
+      mkKeep(pk, render);
+      window.mkSheet(pk);
+      const t = $('#mkin'); if (t) { t.value = S.mk[pk].n || ''; setTimeout(() => { try { t.blur(); } catch (e) {} }, 80); }
+      toast('已往前加一句，共 ' + (was + 1) + ' 句');
+      return;
+    }
+    let n;
+    if (a === 'v' || a === 'p') {
+      n = spanTo(k, a);
+      toast(n === was ? (a === 'v' ? '這一節已經整節畫起來了' : '這一段已經整段畫起來了')
+                      : (a === 'v' ? '已畫整節，共 ' + n + ' 句' : '已畫整段，共 ' + n + ' 句'));
+    } else {
+      n = was + (+a);
+      if (n < 1) return toast('至少要畫一句');
+      if (i >= 0 && i + n > L.length) return toast('後面沒有句子了');
+    }
+    if (n > 1) m.sp = n; else delete m.sp;
+    save(); refresh(k, ta);
+  }
+  const st = document.createElement('style');
+  st.textContent = `.mkspan{margin-top:-4px;gap:6px!important;flex-wrap:nowrap!important}
+.mkspan .spb{min-width:34px;height:36px;padding:0 8px;flex:0 0 auto;border:1px solid var(--line);border-radius:11px;background:var(--card);color:var(--ink);font-size:14.5px;font-family:inherit;white-space:nowrap;cursor:pointer}
+.mkspan .spb:active{background:var(--line)}
+.mkspan .spn{min-width:34px;white-space:nowrap;text-align:center;font-size:14.5px;color:var(--ink)}
+.mkspan-hint{font-size:12.5px;line-height:1.6;color:var(--dusk);background:color-mix(in srgb,var(--brass,#B8862F) 12%,transparent);border-radius:10px;padding:8px 11px;margin:-4px 0 12px}`;
+  document.head.appendChild(st);
+  try { paint(); } catch (e) {}
 })();
 
 try { GX.boot(); } catch (e) { try { console.error("GX boot", e); } catch (_) {} }
